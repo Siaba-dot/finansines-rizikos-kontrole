@@ -1,4 +1,4 @@
-# app.py – Interaktyvi klaidų analizė su slide-like HTML ir filtrais
+# app.py – Klaidų analizė su slide-like HTML, filtrais ir rekomendacijomis
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -6,7 +6,7 @@ import plotly.io as pio
 import io
 
 st.set_page_config(page_title="Klaidų analizė", layout="wide")
-st.title("📊 Klaidų analizė su interaktyviais filtrais ir slide-like HTML")
+st.title("📊 Klaidų analizė su rekomendacijomis ir slide-like HTML")
 
 uploaded_file = st.file_uploader("Įkelkite Excel klaidų registrą", type=["xlsx"])
 
@@ -103,10 +103,17 @@ if uploaded_file:
     st.plotly_chart(fig2, use_container_width=True)
     st.plotly_chart(fig3, use_container_width=True)
 
-    # 7️⃣ Slide-like HTML su filtrais
-    if st.button("📤 Generuoti interaktyvią slide-like HTML ataskaitą"):
+    # 7️⃣ Rekomendacijų žemėlapis
+    rekomendacijos = {
+        "Kritinė": "Imtis neatidėliotinų veiksmų, surinkti komandą ir peržiūrėti procesus.",
+        "Vidutinė": "Peržiūrėti procesus ir optimizuoti klaidų prevenciją.",
+        "Maža": "Sekti tendencijas, gali būti administracinės klaidos.",
+        "Administracinė": "Tik administracinė priežiūra, nereikia skubaus veiksmo."
+    }
+
+    # 8️⃣ Slide-like HTML su filtrais ir rekomendacijomis
+    if st.button("📤 Generuoti interaktyvią slide-like HTML ataskaitą su rekomendacijomis"):
         html_parts = []
-        # CSS + Reveal.js
         reveal_head = """
         <head>
         <meta charset="utf-8">
@@ -149,7 +156,6 @@ if uploaded_file:
         </select>
         </section>
         """
-
         html_parts.append(filters_js)
 
         # KPI slide
@@ -164,11 +170,12 @@ if uploaded_file:
             fig_html = pio.to_html(fig, full_html=False, include_plotlyjs='cdn')
             html_parts.append(f"<section><h2>{title}</h2>{fig_html}</section>")
 
-        # Lentelė
+        # Lentelė + rekomendacijos
+        klaidos_df["Rekomendacija"] = klaidos_df["Klaidos sunkumas"].map(rekomendacijos)
         klaidos_html = klaidos_df.to_html(index=False, escape=False, table_id="klaidosTable")
         for sunkumas in ["Kritinė","Vidutinė","Maža","Administracinė"]:
             klaidos_html = klaidos_html.replace(f">{sunkumas}<", f' class="{sunkumas}">{sunkumas}<')
-        html_parts.append(f"<section><h2>Visos klaidos</h2>{klaidos_html}</section>")
+        html_parts.append(f"<section><h2>Visos klaidos su rekomendacijomis</h2>{klaidos_html}</section>")
 
         # JS filtravimui
         html_parts.append("""
@@ -180,7 +187,7 @@ if uploaded_file:
             var trs = table.getElementsByTagName("tr");
             for (var i = 1; i < trs.length; i++) {
                 var tds = trs[i].getElementsByTagName("td");
-                var rowSunkumas = tds[tds.length-1].textContent.trim();
+                var rowSunkumas = tds[tds.length-2].textContent.trim(); // Sunkumo stulpelis
                 var rowEtapas = tds[2].textContent.trim(); // Proceso etapas stulpelis
                 var show = true;
                 if (sunkumas != "all" && rowSunkumas != sunkumas) show = false;
@@ -207,8 +214,8 @@ if uploaded_file:
 
         full_html = "".join(html_parts)
         html_io = io.BytesIO(full_html.encode('utf-8'))
-        st.success("Interaktyvi slide-like HTML ataskaita paruošta!")
-        st.download_button("📥 Atsisiųsti HTML prezentaciją", html_io, file_name="Klaidu_ataskaita_slide_interactive.html")
+        st.success("Interaktyvi slide-like HTML ataskaita su rekomendacijomis paruošta!")
+        st.download_button("📥 Atsisiųsti HTML prezentaciją", html_io, file_name="Klaidu_ataskaita_slide_rekomendacijos.html")
 
 else:
     st.info("Įkelkite Excel failą, kad pradėtume analizę")
