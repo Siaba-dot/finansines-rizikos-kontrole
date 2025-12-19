@@ -1,4 +1,4 @@
-# app.py – Klaidų analizė su rekomendacijomis, interaktyvi HTML slide-like prezentacija
+# app.py – Klaidų analizė su rekomendacijomis, slide-like HTML
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -184,11 +184,11 @@ if uploaded_file:
             for (var i = 1; i < trs.length; i++) {
                 var tds = trs[i].getElementsByTagName("td");
                 var rowSunkumas = tds[tds.length-2].textContent.trim(); // Klaidos sunkumas stulpelis
-                var rowEtapas = tds[2].textContent.trim(); // Proceso etapas stulpelis
+                var rowEtapas = tds[2].textContent.trim();              // Proceso etapas stulpelis
                 var show = true;
                 if (sunkumas != "all" && rowSunkumas != sunkumas) show = false;
                 if (etapas != "all" && rowEtapas != etapas) show = false;
-                trs[i].style.display = show ? "" : "none";
+                trs[i].style.display = show ? "" : "none"; // Rekomendacija visada matosi
             }
         }
         </script>
