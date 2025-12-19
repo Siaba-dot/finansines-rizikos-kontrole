@@ -1,4 +1,4 @@
-# app.py – Klaidų analizė su slide-like HTML ataskaita + spalvoti grafikai
+# app.py – Klaidų analizė su slide-like HTML ataskaita ir spalvomis
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -86,6 +86,7 @@ if uploaded_file:
     # ----------------------------
     # 6. Grafikai su spalvomis pagal sunkumą
     # ----------------------------
+    # Grafikas pagal sunkumą
     fig1 = px.bar(
         klaidos_df.groupby("Klaidos sunkumas").size().reset_index(name="Kiekis"),
         x="Klaidos sunkumas", y="Kiekis",
@@ -94,14 +95,17 @@ if uploaded_file:
         title="Klaidų pasiskirstymas pagal sunkumą"
     )
 
+    # Grafikas pagal proceso etapą + sunkumą
+    etapas_sunkumas = klaidos_df.groupby(["Proceso etapas","Klaidos sunkumas"]).size().reset_index(name="Kiekis")
     fig2 = px.bar(
-        klaidos_df.groupby("Proceso etapas").size().reset_index(name="Kiekis"),
+        etapas_sunkumas,
         x="Proceso etapas", y="Kiekis",
-        title="Klaidos pagal proceso etapą",
         color="Klaidos sunkumas",
-        color_discrete_map=spalvos
+        color_discrete_map=spalvos,
+        title="Klaidos pagal proceso etapą ir sunkumą"
     )
 
+    # Grafikas taisymo laikas pagal klaidos tipą
     fig3 = px.bar(
         klaidos_df,
         x="Klaidos tipas", y="Taisymo laikas (val)",
@@ -145,7 +149,7 @@ if uploaded_file:
         """
         html_parts.append("<html>" + reveal_head + "<body><div class='reveal'><div class='slides'>")
 
-        # Slide 1 – KPI su spalvomis
+        # Slide 1 – KPI
         html_parts.append("<section><h1>KPI</h1>")
         html_parts.append(f"<p>Tikrų klaidų skaičius: {len(klaidos_df)}</p>")
         html_parts.append(f"<p>Prarastas laikas (val): {round(klaidos_df['Taisymo laikas (val)'].sum(),2)}</p>")
@@ -158,7 +162,7 @@ if uploaded_file:
 
         # Slide 3 – Proceso etapas grafikas
         fig2_html = pio.to_html(fig2, full_html=False, include_plotlyjs=False)
-        html_parts.append(f"<section><h2>Klaidos pagal proceso etapą</h2>{fig2_html}</section>")
+        html_parts.append(f"<section><h2>Klaidos pagal proceso etapą ir sunkumą</h2>{fig2_html}</section>")
 
         # Slide 4 – Taisymo laikas grafikas
         fig3_html = pio.to_html(fig3, full_html=False, include_plotlyjs=False)
