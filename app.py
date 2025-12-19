@@ -1,7 +1,6 @@
-# app.py – TVARKINGAS Streamlit skriptas klaidų analizei
+# app.py – Klaidų analizė su HH:MM:SS laikais ir vizualizacija
 import streamlit as st
 import pandas as pd
-import numpy as np
 import plotly.express as px
 
 st.set_page_config(page_title="Klaidų analizė", layout="wide")
@@ -18,12 +17,11 @@ if uploaded_file:
     # ----------------------------
     # 2. KLAIDOS IDENTIFIKACIJA
     # ----------------------------
-    # Klaida egzistuoja TIK jei 'Klaidos tipas' nėra tuščias
     df["Yra klaida"] = df["Klaidos tipas"].notna() & (df["Klaidos tipas"].astype(str).str.strip() != "")
     klaidos_df = df[df["Yra klaida"]].copy()
 
     # ----------------------------
-    # 3. FINANSINĖ RIZIKA – konvertuojame į skaičių
+    # 3. FINANSINĖ RIZIKA
     # ----------------------------
     klaidos_df["Finansinė rizika (€)"] = (
         klaidos_df["Finansinė rizika"]
@@ -37,20 +35,24 @@ if uploaded_file:
     ).fillna(0)
 
     # ----------------------------
-    # 4. TAISYMO LAIKO SKAIČIAVIMAS
+    # 4. TAISYMO LAIKO SKAIČIAVIMAS (HH:MM:SS)
     # ----------------------------
-    klaidos_df["Klaidos ištaisymo laiko pradžia"] = pd.to_datetime(
-        klaidos_df["Klaidos ištaisymo laiko pradžia"], errors="coerce"
+    klaidos_df["Pradžia"] = pd.to_datetime(
+        klaidos_df["Klaidos ištaisymo laiko pradžia"], format="%H:%M:%S", errors="coerce"
     )
-    klaidos_df["Klaidos ištaisymo laiko pabaiga"] = pd.to_datetime(
-        klaidos_df["Klaidos ištaisymo laiko pabaiga"], errors="coerce"
+    klaidos_df["Pabaiga"] = pd.to_datetime(
+        klaidos_df["Klaidos ištaisymo laiko pabaiga"], format="%H:%M:%S", errors="coerce"
     )
 
+    # Taisymo laikas minutėmis
     klaidos_df["Taisymo laikas (min)"] = (
-        (klaidos_df["Klaidos ištaisymo laiko pabaiga"] - 
-         klaidos_df["Klaidos ištaisymo laiko pradžia"])
-        .dt.total_seconds() / 60
-    ).fillna(0)
+        (klaidos_df["Pabaiga"] - klaidos_df["Pradžia"]).dt.total_seconds() / 60
+    )
+
+    # Jei pabaiga < pradžia (per naktį), pridėti 24h
+    klaidos_df["Taisymo laikas (min)"] = klaidos_df["Taisymo laikas (min)"].apply(
+        lambda x: x + 24*60 if x < 0 else x
+    )
 
     klaidos_df["Taisymo laikas (val)"] = klaidos_df["Taisymo laikas (min)"] / 60
 
@@ -76,7 +78,6 @@ if uploaded_file:
     # 6. KPI – vadovų „WOW“
     # ----------------------------
     col1, col2, col3, col4 = st.columns(4)
-
     col1.metric("📌 Tikrų klaidų skaičius", len(klaidos_df))
     col2.metric("⏱️ Prarastas laikas (val)", round(klaidos_df["Taisymo laikas (val)"].sum(), 2))
     col3.metric("💰 Bendra finansinė rizika (€)", round(klaidos_df["Finansinė rizika (€)"].sum(), 2))
@@ -111,7 +112,21 @@ if uploaded_file:
     st.plotly_chart(fig3, use_container_width=True)
 
     # ----------------------------
-    # 8. TOP 5 SKAUSMO TAŠKAI
+    # 8. GRAFINIS TAISYMO LAIKO VAIZDAVIMAS
+    # ----------------------------
+    st.subheader("⏱️ Klaidų taisymo laikas (val)")
+    fig4 = px.bar(
+        klaidos_df,
+        x="Klaidos tipas",
+        y="Taisymo laikas (val)",
+        color="Klaidos sunkumas",
+        hover_data=["Finansinė rizika (€)", "Proceso etapas", "Atsakinga puse"],
+        title="Kiekvienos klaidos taisymo laikas"
+    )
+    st.plotly_chart(fig4, use_container_width=True)
+
+    # ----------------------------
+    # 9. TOP 5 SKAUSMO TAŠKAI
     # ----------------------------
     st.subheader("🚨 TOP 5 didžiausios klaidos")
     top5 = klaidos_df.sort_values(
@@ -121,7 +136,7 @@ if uploaded_file:
     st.dataframe(top5)
 
     # ----------------------------
-    # 9. VADOVŲ SANTRAUKA
+    # 10. VADOVŲ SANTRAUKA
     # ----------------------------
     st.subheader("🎯 Vadovų santrauka")
     st.markdown(f"""
