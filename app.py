@@ -1,9 +1,4 @@
-# app.py – TVARKINGAS Streamlit skriptas, kuris:
-# 1. Skaičiuoja KLAIDAS, o ne įrašus
-# 2. Teisingai apskaičiuoja taisymo laiką
-# 3. Automatiškai nustato klaidos sunkumą
-# 4. Rodo vadovams „wow“ analizę
-
+# app.py – TVARKINGAS Streamlit skriptas klaidų analizei
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -21,25 +16,29 @@ if uploaded_file:
     df = pd.read_excel(uploaded_file)
 
     # ----------------------------
-    # 2. NORMALIZACIJA (kritiškai svarbu)
+    # 2. KLAIDOS IDENTIFIKACIJA
     # ----------------------------
-    # Klaida = 1, jei bent vienas iš šių laukų užpildytas
-    klaidos_kriterijai = [
-        "Klaidos tipas",
-        "Klaidos šaltinis",
-        "Proceso etapas",
-        "Finansinė rizika"
-    ]
-
-    df["Yra klaida"] = df[klaidos_kriterijai].notna().any(axis=1)
-
-    # TIKROS KLAIDOS (ne visi įrašai)
-    klaidos_df = df[df["Yra klaida"] == True].copy()
+    # Klaida egzistuoja TIK jei 'Klaidos tipas' nėra tuščias
+    df["Yra klaida"] = df["Klaidos tipas"].notna() & (df["Klaidos tipas"].astype(str).str.strip() != "")
+    klaidos_df = df[df["Yra klaida"]].copy()
 
     # ----------------------------
-    # 3. TAISYMO LAIKO SKAIČIAVIMAS
+    # 3. FINANSINĖ RIZIKA – konvertuojame į skaičių
     # ----------------------------
-    # Jei laikas neskaičiuotas ranka – skaičiuojam automatiškai
+    klaidos_df["Finansinė rizika (€)"] = (
+        klaidos_df["Finansinė rizika"]
+        .astype(str)
+        .str.replace(">", "", regex=False)
+        .str.replace(" ", "", regex=False)
+    )
+    klaidos_df["Finansinė rizika (€)"] = pd.to_numeric(
+        klaidos_df["Finansinė rizika (€)"],
+        errors="coerce"
+    ).fillna(0)
+
+    # ----------------------------
+    # 4. TAISYMO LAIKO SKAIČIAVIMAS
+    # ----------------------------
     klaidos_df["Klaidos ištaisymo laiko pradžia"] = pd.to_datetime(
         klaidos_df["Klaidos ištaisymo laiko pradžia"], errors="coerce"
     )
@@ -48,25 +47,19 @@ if uploaded_file:
     )
 
     klaidos_df["Taisymo laikas (min)"] = (
-        (klaidos_df["Klaidos ištaisymo laiko pabaiga"] -
+        (klaidos_df["Klaidos ištaisymo laiko pabaiga"] - 
          klaidos_df["Klaidos ištaisymo laiko pradžia"])
         .dt.total_seconds() / 60
-    )
+    ).fillna(0)
 
-    klaidos_df["Taisymo laikas (min)"] = klaidos_df["Taisymo laikas (min)"].fillna(0)
     klaidos_df["Taisymo laikas (val)"] = klaidos_df["Taisymo laikas (min)"] / 60
 
     # ----------------------------
-    # 4. KLAIDOS SUNKUMO NUSTATYMAS (AUTOMATINIS)
+    # 5. KLAIDOS SUNKUMO NUSTATYMAS
     # ----------------------------
     def nustatyti_sunkuma(row):
-        rizika = row.get("Finansinė rizika", 0)
+        rizika = row.get("Finansinė rizika (€)", 0)
         laikas = row.get("Taisymo laikas (min)", 0)
-
-        try:
-            rizika = float(rizika)
-        except:
-            rizika = 0
 
         if rizika >= 1000 or laikas >= 240:
             return "Kritinė"
@@ -80,17 +73,17 @@ if uploaded_file:
     klaidos_df["Klaidos sunkumas"] = klaidos_df.apply(nustatyti_sunkuma, axis=1)
 
     # ----------------------------
-    # 5. KPI – VADOVŲ WOW
+    # 6. KPI – vadovų „WOW“
     # ----------------------------
     col1, col2, col3, col4 = st.columns(4)
 
     col1.metric("📌 Tikrų klaidų skaičius", len(klaidos_df))
     col2.metric("⏱️ Prarastas laikas (val)", round(klaidos_df["Taisymo laikas (val)"].sum(), 2))
-    col3.metric("💰 Bendra finansinė rizika (€)", round(pd.to_numeric(klaidos_df["Finansinė rizika"], errors="coerce").sum(), 2))
+    col3.metric("💰 Bendra finansinė rizika (€)", round(klaidos_df["Finansinė rizika (€)"].sum(), 2))
     col4.metric("🔥 Kritinių klaidų", (klaidos_df["Klaidos sunkumas"] == "Kritinė").sum())
 
     # ----------------------------
-    # 6. ANALIZĖ
+    # 7. ANALIZĖ
     # ----------------------------
     st.subheader("📈 Klaidų pasiskirstymas pagal sunkumą")
     fig1 = px.bar(
@@ -118,19 +111,17 @@ if uploaded_file:
     st.plotly_chart(fig3, use_container_width=True)
 
     # ----------------------------
-    # 7. TOP 5 SKAUSMO TAŠKAI
+    # 8. TOP 5 SKAUSMO TAŠKAI
     # ----------------------------
     st.subheader("🚨 TOP 5 didžiausios klaidos")
-
     top5 = klaidos_df.sort_values(
-        by=["Finansinė rizika", "Taisymo laikas (min)"],
+        by=["Finansinė rizika (€)", "Taisymo laikas (min)"],
         ascending=False
     ).head(5)
-
     st.dataframe(top5)
 
     # ----------------------------
-    # 8. IŠVADOS VADOVAMS
+    # 9. VADOVŲ SANTRAUKA
     # ----------------------------
     st.subheader("🎯 Vadovų santrauka")
     st.markdown(f"""
