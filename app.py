@@ -242,5 +242,18 @@ else:
 
 total_errors = int(len(df))
 
+
+# Saugikliai nuo outlier'ių (rizika)
 if "Finansinė rizika" in df.columns:
-    risk_series = df["Finansinė rizika"].where(df["Finansinė riz
+    # BŪTINA: viena eilutė, paprastos kabutės
+    risk_series = df["Finansinė rizika"].where(df["Finansinė rizika"].between(0, 1e9))
+    total_risk = float(np.nansum(risk_series))
+else:
+    total_risk = 0.0
+
+total_fix_hours = total_fix_min / 60.0 if total_fix_min else 0.0
+
+c1, c2, c3 = st.columns(3)
+c1.metric("Klaidų skaičius", total_errors)
+c2.metric("Taisymo laikas (val.)", f"{total_fix_hours:.1f}")
+c3.metric("Finansinė rizika (€)", f"{total_risk:,.2f}")
