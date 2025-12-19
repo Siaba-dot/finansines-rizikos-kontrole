@@ -1,4 +1,4 @@
-# app.py – Klaidų analizė su slide-like HTML, filtrais ir rekomendacijomis
+# app.py – Klaidų analizė su rekomendacijomis, interaktyvi HTML slide-like prezentacija
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -17,7 +17,7 @@ if uploaded_file:
     df["Yra klaida"] = df["Klaidos tipas"].notna() & (df["Klaidos tipas"].astype(str).str.strip() != "")
     klaidos_df = df[df["Yra klaida"]].copy()
 
-    # 2️⃣ Finansinė rizika
+    # 2️⃣ Finansinė rizika pagal sumą ir klaidos tipą
     def nustatyti_finansine_rizika(row):
         try:
             suma = float(row.get("Suma EUR, be PVM", 0))
@@ -103,7 +103,7 @@ if uploaded_file:
     st.plotly_chart(fig2, use_container_width=True)
     st.plotly_chart(fig3, use_container_width=True)
 
-    # 7️⃣ Rekomendacijų žemėlapis
+    # 7️⃣ Rekomendacijos
     rekomendacijos = {
         "Kritinė": "Imtis neatidėliotinų veiksmų, surinkti komandą ir peržiūrėti procesus.",
         "Vidutinė": "Peržiūrėti procesus ir optimizuoti klaidų prevenciją.",
@@ -111,7 +111,9 @@ if uploaded_file:
         "Administracinė": "Tik administracinė priežiūra, nereikia skubaus veiksmo."
     }
 
-    # 8️⃣ Slide-like HTML su filtrais ir rekomendacijomis
+    klaidos_df["Rekomendacija"] = klaidos_df["Klaidos sunkumas"].map(rekomendacijos)
+
+    # 8️⃣ Generavimas slide-like HTML
     if st.button("📤 Generuoti interaktyvią slide-like HTML ataskaitą su rekomendacijomis"):
         html_parts = []
         reveal_head = """
@@ -137,8 +139,26 @@ if uploaded_file:
         """
         html_parts.append("<html>" + reveal_head + "<body><div class='reveal'><div class='slides'>")
 
-        # Filtrai JS
-        filters_js = f"""
+        # KPI slide
+        html_parts.append("<section><h1>KPI</h1>")
+        html_parts.append(f"<p>Tikrų klaidų skaičius: {len(klaidos_df)}</p>")
+        html_parts.append(f"<p>Prarastas laikas (val): {round(klaidos_df['Taisymo laikas (val)'].sum(),2)}</p>")
+        html_parts.append(f"<p>Bendra finansinė rizika (€): {round(klaidos_df['Finansinė rizika (€)'].sum(),2)}</p>")
+        html_parts.append(f"<p style='color:red;'>Kritinių klaidų skaičius: {(klaidos_df['Klaidos sunkumas'] == 'Kritinė').sum()}</p></section>")
+
+        # Grafikai
+        for fig, title in zip([fig1, fig2, fig3], ["Pasiskirstymas pagal sunkumą","Proceso etapas","Taisymo laikas"]):
+            fig_html = pio.to_html(fig, full_html=False, include_plotlyjs='cdn')
+            html_parts.append(f"<section><h2>{title}</h2>{fig_html}</section>")
+
+        # Lentelė su rekomendacijomis
+        klaidos_html = klaidos_df.to_html(index=False, escape=False, table_id="klaidosTable")
+        for sunkumas in ["Kritinė","Vidutinė","Maža","Administracinė"]:
+            klaidos_html = klaidos_html.replace(f">{sunkumas}<", f' class="{sunkumas}">{sunkumas}<')
+        html_parts.append(f"<section><h2>Visos klaidos su rekomendacijomis</h2>{klaidos_html}</section>")
+
+        # JS filtravimas (tik sunkumas ir etapas, rekomendacija visada matosi)
+        html_parts.append("""
         <section>
         <h2>Filtrai</h2>
         <label>Sunkumas:</label>
@@ -152,33 +172,9 @@ if uploaded_file:
         <label>Proceso etapas:</label>
         <select id="etapasFilter" onchange="filterTable()">
             <option value="all">Visi</option>
-            {''.join([f'<option value="{et}">{et}</option>' for et in klaidos_df['Proceso etapas'].unique()])}
+        """ + "".join([f'<option value="{et}">{et}</option>' for et in klaidos_df['Proceso etapas'].unique()]) + """
         </select>
         </section>
-        """
-        html_parts.append(filters_js)
-
-        # KPI slide
-        html_parts.append("<section><h1>KPI</h1>")
-        html_parts.append(f"<p>Tikrų klaidų skaičius: {len(klaidos_df)}</p>")
-        html_parts.append(f"<p>Prarastas laikas (val): {round(klaidos_df['Taisymo laikas (val)'].sum(),2)}</p>")
-        html_parts.append(f"<p>Bendra finansinė rizika (€): {round(klaidos_df['Finansinė rizika (€)'].sum(),2)}</p>")
-        html_parts.append(f"<p style='color:red;'>Kritinių klaidų skaičius: {(klaidos_df['Klaidos sunkumas'] == 'Kritinė').sum()}</p></section>")
-
-        # Grafikai
-        for fig, title in zip([fig1, fig2, fig3], ["Pasiskirstymas pagal sunkumą","Proceso etapas","Taisymo laikas"]):
-            fig_html = pio.to_html(fig, full_html=False, include_plotlyjs='cdn')
-            html_parts.append(f"<section><h2>{title}</h2>{fig_html}</section>")
-
-        # Lentelė + rekomendacijos
-        klaidos_df["Rekomendacija"] = klaidos_df["Klaidos sunkumas"].map(rekomendacijos)
-        klaidos_html = klaidos_df.to_html(index=False, escape=False, table_id="klaidosTable")
-        for sunkumas in ["Kritinė","Vidutinė","Maža","Administracinė"]:
-            klaidos_html = klaidos_html.replace(f">{sunkumas}<", f' class="{sunkumas}">{sunkumas}<')
-        html_parts.append(f"<section><h2>Visos klaidos su rekomendacijomis</h2>{klaidos_html}</section>")
-
-        # JS filtravimui
-        html_parts.append("""
         <script>
         function filterTable() {
             var sunkumas = document.getElementById("sunkumasFilter").value;
@@ -187,7 +183,7 @@ if uploaded_file:
             var trs = table.getElementsByTagName("tr");
             for (var i = 1; i < trs.length; i++) {
                 var tds = trs[i].getElementsByTagName("td");
-                var rowSunkumas = tds[tds.length-2].textContent.trim(); // Sunkumo stulpelis
+                var rowSunkumas = tds[tds.length-2].textContent.trim(); // Klaidos sunkumas stulpelis
                 var rowEtapas = tds[2].textContent.trim(); // Proceso etapas stulpelis
                 var show = true;
                 if (sunkumas != "all" && rowSunkumas != sunkumas) show = false;
