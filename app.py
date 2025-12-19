@@ -1,13 +1,14 @@
-# app.py – Klaidų analizė su automatine finansine rizika, HH:MM:SS laiku ir PowerPoint generavimu
+# app.py – Klaidų analizė su automatine PPT, HH:MM:SS laiku, finansine rizika ir grafika
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 from pptx import Presentation
 from pptx.util import Inches
 import io
+import os
 
 st.set_page_config(page_title="Klaidų analizė", layout="wide")
-st.title("📊 Klaidų analizė ir automatinė PowerPoint ataskaita")
+st.title("📊 Klaidų analizė su PowerPoint generavimu")
 
 # ----------------------------
 # 1. DUOMENŲ ĮKĖLIMAS
@@ -24,7 +25,7 @@ if uploaded_file:
     klaidos_df = df[df["Yra klaida"]].copy()
 
     # ----------------------------
-    # 3. FINANSINĖ RIZIKA – AUTOMATIZUOTA
+    # 3. FINANSINĖ RIZIKA
     # ----------------------------
     def nustatyti_finansine_rizika(row):
         try:
@@ -40,7 +41,7 @@ if uploaded_file:
     klaidos_df["Finansinė rizika (€)"] = klaidos_df.apply(nustatyti_finansine_rizika, axis=1)
 
     # ----------------------------
-    # 4. TAISYMO LAIKO SKAIČIAVIMAS (HH:MM:SS)
+    # 4. TAISYMO LAIKAS
     # ----------------------------
     klaidos_df["Pradžia"] = pd.to_datetime(
         klaidos_df["Klaidos ištaisymo laiko pradžia"], format="%H:%M:%S", errors="coerce"
@@ -58,7 +59,7 @@ if uploaded_file:
     klaidos_df["Taisymo laikas (val)"] = klaidos_df["Taisymo laikas (min)"] / 60
 
     # ----------------------------
-    # 5. KLAIDOS SUNKUMO NUSTATYMAS
+    # 5. KLAIDOS SUNKUMAS
     # ----------------------------
     def nustatyti_sunkuma(row):
         rizika = row.get("Finansinė rizika (€)", 0)
@@ -75,7 +76,7 @@ if uploaded_file:
     klaidos_df["Klaidos sunkumas"] = klaidos_df.apply(nustatyti_sunkuma, axis=1)
 
     # ----------------------------
-    # 6. KPI – vadovų „WOW“
+    # 6. KPI
     # ----------------------------
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("📌 Tikrų klaidų skaičius", len(klaidos_df))
@@ -114,13 +115,13 @@ if uploaded_file:
     st.plotly_chart(fig3, use_container_width=True)
 
     # ----------------------------
-    # 8. AUTOMATINĖ POWERPOINT GENERACIJA
+    # 8. AUTOMATINĖ POWERPOINT GENERACIJA SU GRAFIKA
     # ----------------------------
-    if st.button("📤 Generuoti PowerPoint ataskaitą"):
+    if st.button("📤 Generuoti PowerPoint su grafika"):
         prs = Presentation()
-        layout_blank = prs.slide_layouts[5]  # tuščias slide
+        layout_blank = prs.slide_layouts[5]
 
-        # 1. KPI slide
+        # KPI slide
         slide = prs.slides.add_slide(layout_blank)
         txBox = slide.shapes.add_textbox(Inches(0.5), Inches(0.5), Inches(9), Inches(2))
         tf = txBox.text_frame
@@ -129,10 +130,21 @@ if uploaded_file:
         tf.add_paragraph().text = f"Bendra finansinė rizika (€): {round(klaidos_df['Finansinė rizika (€)'].sum(),2)}"
         tf.add_paragraph().text = f"Kritinių klaidų skaičius: {(klaidos_df['Klaidos sunkumas'] == 'Kritinė').sum()}"
 
-        # 2. Grafikai slide – galima exportuoti plotly į PNG, pvz. fig1.write_image("fig1.png")
-        # Paprasčiausiai įdėsim instrukciją – reikia kaleido įdiegti, jei norima į PowerPoint
+        # Grafikai – eksportuojame į PNG
+        os.makedirs("temp_figs", exist_ok=True)
+        fig1.write_image("temp_figs/fig1.png")
+        fig2.write_image("temp_figs/fig2.png")
+        fig3.write_image("temp_figs/fig3.png")
 
-        # 3. Visos klaidos – batch po 15 eilučių per slide
+        # Įdedame grafikus į slide
+        for fig_file, title in zip(["temp_figs/fig1.png","temp_figs/fig2.png","temp_figs/fig3.png"],
+                                   ["Klaidų pasiskirstymas pagal sunkumą","Klaidos pagal proceso etapą","Klaidų taisymo laikas"]):
+            slide = prs.slides.add_slide(layout_blank)
+            slide.shapes.add_picture(fig_file, Inches(0.5), Inches(1), width=Inches(9))
+            txBox = slide.shapes.add_textbox(Inches(0.5), Inches(0.2), Inches(9), Inches(0.5))
+            txBox.text = title
+
+        # Visos klaidos – batch po 15 eilučių
         batch_size = 15
         for i in range(0, len(klaidos_df), batch_size):
             slide = prs.slides.add_slide(layout_blank)
@@ -143,12 +155,12 @@ if uploaded_file:
                 p = tf.add_paragraph()
                 p.text = f"{row['Klaidos tipas']} | {row['Finansinė rizika (€)']} € | {row['Taisymo laikas (val)']:.2f} val | {row['Proceso etapas']} | {row['Atsakinga puse']}"
 
-        # Išsaugom į in-memory
+        # Save į in-memory
         pptx_io = io.BytesIO()
         prs.save(pptx_io)
         pptx_io.seek(0)
 
-        st.success("PowerPoint ataskaita paruošta!")
+        st.success("PowerPoint su grafika paruošta!")
         st.download_button("📥 Atsisiųsti PowerPoint", pptx_io, file_name="Klaidu_ataskaita.pptx")
 
 else:
