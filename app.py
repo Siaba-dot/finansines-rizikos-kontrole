@@ -1,4 +1,4 @@
-# app.py – Klaidų analizė su HH:MM:SS laikais ir vizualizacija
+# app.py – Klaidų analizė su automatine finansine rizika ir HH:MM:SS laikais
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -21,18 +21,23 @@ if uploaded_file:
     klaidos_df = df[df["Yra klaida"]].copy()
 
     # ----------------------------
-    # 3. FINANSINĖ RIZIKA
+    # 3. FINANSINĖ RIZIKA – AUTOMATIZUOTA
     # ----------------------------
-    klaidos_df["Finansinė rizika (€)"] = (
-        klaidos_df["Finansinė rizika"]
-        .astype(str)
-        .str.replace(">", "", regex=False)
-        .str.replace(" ", "", regex=False)
-    )
-    klaidos_df["Finansinė rizika (€)"] = pd.to_numeric(
-        klaidos_df["Finansinė rizika (€)"],
-        errors="coerce"
-    ).fillna(0)
+    def nustatyti_finansine_rizika(row):
+        try:
+            suma = float(row.get("Suma EUR, be PVM", 0))
+        except:
+            suma = 0
+
+        klaidos_tipas = str(row.get("Klaidos tipas", "")).lower()
+
+        # Tikriname, ar klaidos tipuose yra "terminas"
+        if "terminas" in klaidos_tipas:
+            return suma
+        else:
+            return 0
+
+    klaidos_df["Finansinė rizika (€)"] = klaidos_df.apply(nustatyti_finansine_rizika, axis=1)
 
     # ----------------------------
     # 4. TAISYMO LAIKO SKAIČIAVIMAS (HH:MM:SS)
